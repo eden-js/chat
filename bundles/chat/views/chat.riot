@@ -1,0 +1,441 @@
+<chat>
+  <div class={ classes({ 'chat' : true, 'd-none' : !eden.frontend }) }>
+    <div class={ `chat-chats ${state.open ? 'is-open' : ''}` }>
+    
+      <div class={ classes({ 'card card-chats mb-3' : true, 'd-none' : !state.open }) }>
+        <div class="card-header p-2">
+          <div class="form-group m-0">
+            <div class="input-group">
+              <input class="form-control" type="search" ref="search" onkeyup={ (e) => onKeyUp(e) } />
+              <div class="input-group-append">
+                <button class="btn btn-primary" onclick={ (e) => onSearch(e) }>
+                  <i class="fa fa-search" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card-body p-0">
+          <div class="text-center p-3" if={ loading() }>
+            <i class="fa fa-3x fa-spinner fa-spin" />
+          </div>
+          <div if={ !loading() } each={ (user, i) in members } class="chat-user" onclick={ (e) => onChat(e, user) }>
+            { user.username }
+          </div>
+        </div>
+      </div>
+      
+      <button class="btn btn-open btn-primary" onclick={ (e) => onToggleOpen(e) }>
+        <i class="fa fa-comments" />
+      </button>
+      
+      <div ref="container" if={ !loading('chats') }>
+        <div is="chat-pane" each={ (chat, i) in getChats() } if={ !chat.get('style') } on-refresh={ onRefresh } on-close={ onChatClose } on-read={ onChatRead } on-activate={ (e) => onChatActivate(chat) } chat={ chat } i={ i } class={ `chat-pane chat-pane-${i} ${chat.get('active') ? 'active' : ''}` } data-chat={ chat.get('uuid') } onclick={ (e) => onChatActivate(chat) } />
+        <div is="chat-pane" each={ (chat, i) in getChats(true) } if={ chat.get('style') } on-refresh={ onRefresh } on-close={ onChatClose } on-read={ onChatRead } on-activate={ (e) => onChatActivate(chat) } chat={ chat } i={ i } class={ `chat-pane chat-free ${chat.get('active') ? 'active' : ''}` } data-chat={ chat.get('uuid') } style={ getStyle(chat) } onclick={ (e) => onChatActivate(chat) } />
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // import base
+    import Base from './js/base';
+    import Model from './js/model';
+    import moment from  'moment';
+
+    /**
+     * export base class
+     */
+    export default class Chat extends Base {
+      /**
+       * on before mount
+       */
+      onBeforeMount(...args) {
+        // on before mount
+        super.onBeforeMount(...args);
+
+        // do mixins
+        Model(this);
+
+        // bind methods
+        this.onCreated = this.onCreated.bind(this);
+        this.onRefresh = this.onRefresh.bind(this);
+        this.onChatRead = this.onChatRead.bind(this);
+        this.onChatClose = this.onChatClose.bind(this);
+        this.onChatActivate = this.onChatActivate.bind(this);
+
+        // set open
+        this.state.open = false;
+        
+        // set varialbes
+        this.chats   = (this.props.chats || []).map(chat => this.model('chat', chat));
+        this.members = [];
+        this.actives = [];
+      }
+
+      /**
+       * on mounted
+       */
+      onMounted(...args) {
+        // run super
+        super.onMounted(...args);
+
+        // check frontend
+        if (!this.eden.frontend) return;
+        
+        // setup dragula
+        this.dragula();
+
+        // check user exists
+        if (!eden.get('user').exists()) return;
+        
+        // load users
+        this.loadChats();
+        this.loadMembers();
+        
+        // on created
+        eden.socket.on('chat.create', this.onCreated);
+      }
+
+      /**
+       * on updated
+       */
+      onUpdated(...args) {
+        // run super
+        super.onUpdated(...args);
+
+        // check frontend
+        if (!this.eden.frontend) return;
+
+        // check dragula
+        if (!this.drake) return;
+
+        // add containser
+        this.drake.containers = [this.$('[ref="container"]')];
+      }
+
+      /**
+       * on before unmount
+       */
+      onBeforeUnmount(...args) {
+        // super
+        super.onBeforeUnmount(...args);
+        
+        // check frontend
+        if (!this.eden.frontend) return;
+        
+        // on created
+        eden.socket.off('chat.create', this.onCreated);
+      }
+      
+      /**
+       * on chat
+       *
+       * @param  {Event} e
+       */
+      async onChat(e, user) {
+        // prevent default
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // set loading
+        user.loading = true;
+        
+        // set chat
+        this.update();
+        
+        // create chat
+        const chat = await eden.socket.call('chat.create', [eden.get('user').get('id'), user.id]);
+        await eden.socket.call('chat.member.set', chat.id, 'opened', true);
+        
+        // set loading
+        user.loading = false;
+        
+        // set chat
+        this.update();
+      }
+      
+      /**
+       * on close chat
+       *
+       * @param  {Chat} chat
+       */
+      async onChatClose(chat) {      
+        // filter chats
+        this.chats = this.chats.filter((c) => c.get('id') !== chat.get('id'));
+        
+        // set opened
+        chat.set('opened', false);
+        
+        // set opened
+        await eden.socket.call('chat.member.set', chat.get('id'), 'style', null);
+        await eden.socket.call('chat.member.set', chat.get('id'), 'opened', false);
+        await eden.socket.call('chat.member.set', chat.get('id'), 'minimised', false);
+        
+        // update
+        this.update();
+      }
+      
+      /**
+       * on read
+       *
+       * @param  {EdenModel} chat
+       *
+       * @return {Promise}
+       */
+      async onChatRead(chat) {
+        // check chat
+        if (!chat) return;
+
+        // set read
+        chat.set('read', new Date());
+        chat.set('unread', 0);
+        
+        // call socket
+        eden.socket.call('chat.member.read', chat.get('id'), chat.get('read'));
+        
+        // update view
+        this.update();
+      }
+      
+      /**
+       * on activate
+       *
+       * @param  {EdenModel} chat
+       */
+      async onChatActivate(chat) {
+        // get chats
+        chat.set('active', true);
+        if (chat.get('style')) chat.set('style.z-index', 100 + this.getChats(true).length);
+        
+        // move down next top chat
+        this.chats.filter((c) => c.get('id') !== chat.get('id')).forEach((c) => {
+          // set z-index
+          if (c.get('style.z-index')) c.set('style.z-index', c.get('style.z-index') === 100 ? 100 : c.get('style.z-index') - 1);
+          c.set('active', false);
+          
+          // set chat style
+          if (chat.get('style')) eden.socket.call('chat.member.set', c.get('id'), 'style', c.get('style'));
+        });
+        
+        // set chat style
+        if (chat.get('style')) await eden.socket.call('chat.member.set', chat.get('id'), 'style', chat.get('style'));
+        
+        // set opened
+        await eden.socket.call('chat.member.set', chat.get('id'), 'opened', true);
+        
+        // on read
+        this.onChatRead(chat);
+      }
+      
+      /**
+       * on send
+       *
+       * @param  {Event} e
+       *
+       * @return {*}
+       */
+      onSearch(e) {
+        // prevent default
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // load users
+        this.loadMembers();
+      }
+      
+      /**
+       * on keyup
+       *
+       * @param  {Event} e
+       */
+      onKeyUp(e) {
+        // enter pressed
+        if ((e.keyCode ? e.keyCode : e.which) === 13) {
+          // send message
+          this.onSearch(e);
+        }
+      }
+      
+      /**
+       * load users
+       *
+       * @return {Promise}
+       */
+      async loadMembers() {
+        // set loading
+        this.loading('members', true);
+        
+        // load users
+        this.members = await eden.socket.call('chat.members', this.refs.search.value);
+        
+        // set loading
+        this.loading('members', false);
+      }
+      
+      /**
+       * load users
+       *
+       * @return {Promise}
+       */
+      async loadChats() {
+        // set loading
+        this.loading('chats', true);
+        
+        // load users
+        this.chats = (await eden.socket.call('chat.all') || []).map(chat => this.model('chat', chat));
+
+        // set chats
+        eden.get('chat').chats = this.chats;
+        
+        // set loading
+        this.loading('chats', false);
+      }
+      
+      /**
+       * get chats
+       *
+       * @param  {Boolean} free
+       *
+       * @return {*}
+       */
+      getChats(free) {
+        // filter chat
+        return this.chats.filter((chat) => {
+          // check style
+          return chat.get('opened') && ((free && chat.get('style')) || (!free && !chat.get('style')));
+        });
+      }
+
+      /**
+       * gets style for chat
+       */
+      getStyle(chat) {
+        // return chat style
+        return `top:${chat.get('style.top')}; left:${chat.get('style.left')};${chat.get('style.z-index') ? `z-index:${chat.get('style.z-index')};` : ''}`;
+      }
+      
+      /**
+       * on toggle open
+       *
+       * @param  {Event} e
+       */
+      onToggleOpen(e) {
+        // prevent default
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // toggle open
+        this.update({
+          open : !this.state.open
+        });
+        
+        // update view
+        this.update();
+      }
+      
+      /**
+       * on toggle chat
+       *
+       * @param  {Event} e
+       */
+      onToggleActive(e) {
+        // actives
+        if (this.actives.includes(e.item.chat)) {
+          // filter out
+          this.actives = this.actives.filter((item) => item !== e.item.chat.get('uuid'));
+        } else {
+          // push active chat
+          this.actives.push(e.item.chat.get('uuid'));
+        }
+        
+        // update view
+        this.update();
+      }
+      
+      /**
+       * set dragula
+       *
+       * @return {*}
+       */
+      dragula() {
+        // require dragula
+        const dragula = require('dragula');
+        
+        // drop function
+        const drop = (el, target, source, sibling) => {
+          // get style element
+          const clone = document.querySelector('.gu-mirror[data-chat="' + el.getAttribute('data-chat') + '"]');
+          
+          // get styleW
+          const chat = this.chats.find((chat) => chat.get('uuid') === el.getAttribute('data-chat'));
+          
+          // set style
+          chat.set('style', {
+            top  : clone.style.top,
+            left : clone.style.left,
+          });
+          
+          // activate chat
+          this.onChatActivate(chat);
+          
+          // update view
+          this.onRefresh();
+        };
+        
+        // get elements
+        this.drake = dragula([this.$('[ref="container"]')], {
+          moves : function (el, source, handle, sibling) {
+            // get parent
+            let parent = handle;
+            
+            // check moves
+            while (parent && parent.getAttribute) {
+              // return true if has card header
+              if ((parent.getAttribute('class') || '').includes('moves')) return true;
+              if ((parent.getAttribute('class') || '').includes('btn')) return false;
+              
+              // set parent
+              parent = parent.parentNode;
+            }
+          },
+        }).on('cloned', (clone, original, type) => {
+          // set scroll height
+          const scroll = clone.querySelector('[ref="messages"]');
+          
+          // fix scroll top
+          if (scroll) scroll.scrollTop = scroll.scrollHeight;
+        }).on('drag', (el, source) => {
+          // set opacity
+          el.style.opacity = 0;
+        }).on('cancel', drop).on('drop', drop);
+      }
+      
+      /**
+       * on created chat
+       *
+       * @param  {Object} chat
+       */
+      onCreated(chat) {
+        // check chat exists
+        if (this.chats.find(c => c.get('uuid') === chat.uuid)) {
+          return;
+        }
+        
+        // push chat
+        this.chats.push(this.model('chat', chat));
+        
+        // update view
+        this.update();
+      }
+
+      /**
+       * refresh chats
+       */
+      onRefresh() {
+        // refresh
+        this.loading('chats', true);
+        setTimeout(() => this.loading('chats', false), 10);
+      }
+    }
+  </script>
+</chat>

@@ -50,6 +50,16 @@ $chat-pane-height : $chat-pane-width * 1.5!default;
     height   : $chat-pane-height;
     bottom   : ($input-btn-padding-y * 2) + ($line-height-base * $font-size-base) + ($chat-pane-spacer * 2);
     position : absolute;
+
+    > .card-body {
+      overflow-y : scroll;
+
+      .chat-user {
+        &:hover {
+          background : rgba($body-bg, 0.4);
+        }
+      }
+    }
   }
 }
 
@@ -194,8 +204,23 @@ $chat-pane-height : $chat-pane-width * 1.5!default;
       list-style : none;
     }
 
+    .message-box {
+      display       : block;
+      margin-bottom : $chat-pane-spacer;
+
+      .message-avatar {
+        float         : left;
+        width         : ($spacer * 2);
+        margin-right  : ($spacer / 2);
+        border-radius : $spacer;
+      }
+      .message-main {
+        margin-left : ($spacer * 2.5);
+      }
+    }
+
     .message-data {
-      margin-bottom : ($chat-pane-spacer / 2);
+      display : block;
     }
 
     .message-data-name {
@@ -208,48 +233,52 @@ $chat-pane-height : $chat-pane-width * 1.5!default;
     }
 
     .message {
-      color         : $white;
       display       : inline-block;
       padding       : ($chat-pane-spacer / 2) $chat-pane-spacer;
       position      : relative;
-      font-size     : $font-size-sm;
-      max-width     : 90%;
-      margin-bottom : $chat-pane-spacer;
+      max-width     : 80%;
       border-radius : $border-radius;
 
       a {
-        color           : $white;
         text-decoration : underline;
       }
 
       &:after {
-        left     : $chat-pane-spacer;
+        top      : ($chat-pane-spacer / 2);
+        left     : 100%;
         width    : 0;
         height   : 0;
-        bottom   : 100%;
         border   : solid transparent;
         content  : " ";
         position : absolute;
 
         // theme color border
-        border-width        : ($chat-pane-spacer / 2);
-        border-bottom-color : theme-color(success);
+        border-width      : ($chat-pane-spacer / 2);
+        border-left-color : theme-color(secondary);
+      }
+    }
+
+    // display none arrows
+    .in-thread-previous {
+      .message:after {
+        display : none;
       }
     }
 
     // message my
     .my-message {
-      background : theme-color(success);
+      background : theme-color(secondary);
     }
 
     // other message
     .other-message {
-      background : theme-color(primary);
+      color      : $white;
+      background : theme-color(success);
 
       &:after {
-        left                : auto;
-        right               : $chat-pane-spacer;
-        border-bottom-color : theme-color(primary);
+        top                : ($chat-pane-spacer / 2);
+        right              : 100%;
+        border-right-color : theme-color(success);
       }
     }
   }

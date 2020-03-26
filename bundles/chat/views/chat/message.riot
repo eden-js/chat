@@ -1,0 +1,119 @@
+<chat-message>
+  <div class={ `message-box ${isInThreadNext() ? 'mb-1 in-thread-next' : ''} ${isInThreadPrevious() ? 'in-thread-previous' : ''}` }>
+    <img if={ message.from !== eden.get('user').get('id') && isInThreadPrevious() } src={ getFrom(message).avatar ? media.url(getFrom(message).avatar) : '/public/assets/images/avatar.png' } class="message-avatar" />
+
+    <div class="message-main">
+      <div class={ `message ${message.from === eden.get('user').get('id') ? 'my-message float-right text-right' : 'other-message'}` }>
+        <raw data={ { 'html' : get('message.message') } } />
+      </div>
+      <div class="clearfix" />
+      <div if={ !isInThreadNext() } class={ `message-data ${message.from === eden.get('user').get('id') ? 'text-right' : 'text-left'}` }>
+        <small class="text-muted">{ getDate(message) }</small>
+      </div>
+    </div>
+  </div>
+
+  <div ref="embeds" if={ message.embeds && message.embeds.length } class={ `mb-2 chat-embeds ${message.from !== eden.get('user').get('id') ? 'text-left' : ''}` }>
+    <a each={ (embed, i) in message.embeds } class="embed text-body" style={ `${embed.type === 'image' ? `background-image:url(${embed.data ? media.url(embed.data, '2x') : embed.thumb});` : ''}` } title={ embed.name } target={ embed.id ? '_blank' : null } href={ embed.data ? media.url(embed.data) : '#' }>
+      <i class={ `fa ${embed.data ? embed.data.icon : embed.icon}` } />
+      <span class="embed-name">
+        { embed.data ? embed.data.name : embed.name }
+      </span>
+      <div class="progress" if={ !embed.data }>
+        <div class="progress-bar" role="progressbar" aria-valuenow={ embed.progress } aria-valuemin="0" aria-valuemax="100" style={ `width: ${embed.progress}%;` }></div>
+      </div>
+    </a>
+  </div>
+  
+  <script>
+    // import
+    import moment from 'moment';
+    import Scrollbar from 'perfect-scrollbar';
+    
+    // import local dependencies
+    import Base from '../js/base';
+    import Media from 'asset/public/js/bootstrap';
+
+    /**
+     * export default
+     */
+    export default class ChatMessage extends Base {
+      
+      /**
+       * on before mount
+       */
+      onBeforeMount(...args) {
+        // on before mount
+        super.onBeforeMount(...args);
+
+        // set media
+        this.media = Media;
+
+        // set variables
+        this.message = this.props.message;
+      }
+
+      /**
+       * gets from
+       *
+       * @param  {Object} message
+       *
+       * @return {Object}
+       */
+      getFrom(message) {
+        // return usernames
+        return this.props.chat.get('members').find((member) => member.id === message.from);
+      }
+      
+      /**
+       * get date
+       *
+       * @param  {Object} message
+       *
+       * @return {String}
+       */
+      getDate(message) {
+        // from now
+        return moment(message.created_at).fromNow();
+      }
+      
+      /**
+       * do scroll
+       *
+       * @return {*}
+       */
+      doScroll() {
+        // check embeds
+        if (this.refs.embeds && !this.embedScroll) {
+          // set embed scrollbar
+          this.embedScroll = new Scrollbar(this.refs.embeds);
+        } else if (!this.refs.embeds) {
+          // reset
+          this.embedScroll = null;
+        }
+      }
+
+      /**
+       * is in thread
+       */
+      isInThreadNext() {
+        // check previous
+        if (!this.props.next) return false;
+
+        // return
+        return this.props.message.from === this.props.next.from && (new Date(this.props.next.created_at).getTime() - new Date(this.props.message.created_at).getTime()) < (15 * 1000);
+      }
+
+      /**
+       * is in thread
+       */
+      isInThreadPrevious() {
+        // check previous
+        if (!this.props.previous) return false;
+
+        // return
+        return this.props.message.from === this.props.previous.from && (new Date(this.props.message.created_at).getTime() - new Date(this.props.previous.created_at).getTime()) < (15 * 1000);
+      }
+    }
+  </script>
+</chat-message>

@@ -65,6 +65,12 @@ class ChatController extends Controller {
    * @return {Promise}
    */
   async createAction(ids, hash, opts) {
+    // update
+    if (!opts) {
+      opts = hash;
+      hash = JSON.stringify(ids);
+    }
+
     // get users
     const users = await Promise.all(ids.map(user => User.findById(user)));
 

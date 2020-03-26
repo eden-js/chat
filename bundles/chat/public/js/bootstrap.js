@@ -1,6 +1,6 @@
 
 // Require local dependencies
-const store = require('default/public/js/store');
+const store = require('core/public/js/store');
 
 // built
 let built = null;
