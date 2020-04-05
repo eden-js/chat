@@ -269,7 +269,12 @@ class ChatController extends Controller {
     opts.socket.join(`chat.${id}`);
 
     // add to room
-    return await modelHelper.listen(opts.sessionID, await Chat.findById(id), uuid, true);
+    return await modelHelper.addListener(await Chat.findById(id), {
+      user      : opts.user,
+      atomic    : true,
+      listenID  : uuid,
+      sessionID : opts.sessionID
+    });
   }
 
   /**
@@ -289,7 +294,12 @@ class ChatController extends Controller {
     opts.socket.leave(`chat.${id}`);
 
     // add to room
-    return await modelHelper.deafen(opts.sessionID, await Chat.findById(id), uuid, true);
+    return await modelHelper.removeListener(await Chat.findById(id), {
+      user      : opts.user,
+      atomic    : true,
+      listenID  : uuid,
+      sessionID : opts.sessionID
+    });
   }
 }
 
