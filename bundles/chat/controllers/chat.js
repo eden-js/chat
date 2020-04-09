@@ -10,7 +10,7 @@ const ChatMessage = model('chatMessage');
 
 // require helpers
 const chatHelper = helper('chat');
-const modelHelper = helper('model');
+const syncHelper = helper('sync');
 
 /**
  * Build chat controller
@@ -269,7 +269,7 @@ class ChatController extends Controller {
     opts.socket.join(`chat.${id}`);
 
     // add to room
-    return await modelHelper.addListener(await Chat.findById(id), {
+    return await syncHelper.addListener(await Chat.findById(id), {
       user      : opts.user,
       atomic    : true,
       listenID  : uuid,
@@ -294,7 +294,7 @@ class ChatController extends Controller {
     opts.socket.leave(`chat.${id}`);
 
     // add to room
-    return await modelHelper.removeListener(await Chat.findById(id), {
+    return await syncHelper.removeListener(await Chat.findById(id), {
       user      : opts.user,
       atomic    : true,
       listenID  : uuid,
